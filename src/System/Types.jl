@@ -62,6 +62,11 @@ struct PairCoupling
     end
 end
 
+mutable struct ChiralInteraction
+    γ                :: Float64
+    neighbor_indices :: Array{SVector{6, CartesianIndex}, 4}
+end
+
 mutable struct Interactions
     # Onsite coupling is either an N×N Hermitian matrix or possibly renormalized
     # Stevens coefficients, depending on the mode :SUN or :dipole.
@@ -107,6 +112,9 @@ mutable struct System{N}
 
     # Optional long-range dipole-dipole interactions
     ewald                  :: Union{Ewald, Nothing}
+
+    # Three-spin interaction for triangular lattices
+    chiral_interaction     :: Union{ChiralInteraction, Nothing}
 
     # Dynamical variables and buffers (dims × natoms)
     const extfield         :: Array{Vec3, 4}            # External B field

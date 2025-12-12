@@ -83,7 +83,7 @@ function System(crystal::Crystal, moments::Vector{Pair{Int, Moment}}, mode::Symb
 
     rng = isnothing(seed) ? Random.Xoshiro(rand(UInt64, 4)...) : Random.Xoshiro(seed)
 
-    ret = System(nothing, mode, crystal, (1, 1, 1), Ns, κs, gs, interactions, ewald,
+    ret = System(nothing, mode, crystal, (1, 1, 1), Ns, κs, gs, interactions, ewald, nothing,
                  extfield, dipoles, coherents, dipole_buffers, coherent_buffers, rng)
     polarize_spins!(ret, (0,0,1))
     return dims == (1, 1, 1) ? ret : repeat_periodically(ret, dims)
@@ -155,7 +155,7 @@ function clone_system(sys::System{N}) where N
     empty_coherent_buffers = Array{CVec{N}, 4}[]
 
     ret = System(origin_clone, mode, crystal, dims, Ns, copy(κs), copy(gs),
-                 interactions_clone, ewald_clone, copy(extfield), copy(dipoles), copy(coherents),
+                 interactions_clone, ewald_clone, nothing, copy(extfield), copy(dipoles), copy(coherents),
                  empty_dipole_buffers, empty_coherent_buffers, copy(rng))
 
     if !isnothing(ewald)
@@ -163,6 +163,10 @@ function clone_system(sys::System{N}) where N
         # Ewald data structures from scratch. This might be fixed eventually.
         # See https://github.com/JuliaMath/FFTW.jl/issues/261.
         enable_dipole_dipole!(ret, ewald.μ0_μB²; ewald.demag)
+    end
+
+    if !isnothing(sys.chiral_interaction)
+        set_chiral_interaction!(ret, chiral_interaction.γ)
     end
 
     return ret

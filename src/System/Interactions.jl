@@ -191,6 +191,34 @@ function set_field_at!(sys::System, B_μB, site)
 end
 
 """
+    set_chiral_interaction!(sys::System, γ)
+"""
+function set_chiral_interaction!(sys::System, γ)
+    # TODO: Check have a undecorated triangular lattice
+    if sys.crystal.sg.number != 191 || natoms(sys.crystal) > 1
+        error("Three-spin chiral interaction only available on an undecorated triangular lattice.")
+    end
+    nx, ny = size(sys.dipoles)[1:2]
+    if isnothing(sys.chiral_interaction)
+        neighbor_indices = map(CartesianIndices(sys.dipoles)) do idx
+            x, y, z, a = idx.I
+            SVector{6, CartesianIndex}(
+                CartesianIndex(mod1(x+1, nx), mod1(y,   ny), z, a),
+                CartesianIndex(mod1(x+1, nx), mod1(y+1, ny), z, a),
+                CartesianIndex(mod1(x,   nx), mod1(y+1, ny), z, a),
+                CartesianIndex(mod1(x-1, nx), mod1(y,   ny), z, a),
+                CartesianIndex(mod1(x-1, nx), mod1(y-1, ny), z, a),
+                CartesianIndex(mod1(x,   nx), mod1(y-1, ny), z, a),
+            )
+        end
+        sys.chiral_interaction = ChiralInteraction(γ, neighbor_indices)
+    else
+        sys.chiral_interaction.γ = γ
+    end
+    return nothing
+end
+
+"""
     set_vacancy_at!(sys::System, site::Site)
 
 Make a single [`Site`](@ref) nonmagnetic. The system must support inhomogeneous
@@ -390,6 +418,20 @@ function energy(sys::System{N}; check_normalization=true) where N
         E += ewald_energy(sys)
     end
 
+    # Chiral term
+    if !isnothing(sys.chiral_interaction)
+        (; dipoles, chiral_interaction) = sys
+        (; neighbor_indices, γ) = chiral_interaction
+        for site in eachsite(sys) 
+            S₀ = sys.dipoles[site]
+            for i in 1:6
+                S₁ = dipoles[neighbor_indices[site][i]]
+                S₂ = dipoles[neighbor_indices[site][i%6+1]]
+                E += (γ/3) * (S₀ ⋅ (S₁ × S₂))  # Avoid triple-counting plaquettes
+            end
+        end
+    end
+
     return E
 end
 
@@ -482,6 +524,18 @@ function set_energy_grad_dipoles!(∇E, dipoles::Array{Vec3, 4}, sys::System{N})
     for site in eachsite(sys)
         ∇E[site] += sys.gs[site]' * sys.extfield[site]
     end
+
+    if !isnothing(sys.chiral_interaction)
+        (; γ, neighbor_indices) = sys.chiral_interaction
+        for site in eachsite(sys)
+            for i in 1:6
+                S₁ = sys.dipoles[neighbor_indices[site][i]]
+                S₂ = sys.dipoles[neighbor_indices[site][i%6+1]]
+                ∇E[site] += γ * (S₁ × S₂) 
+            end
+        end
+    end
+
 
     # Anisotropies and exchange interactions
     if is_homogeneous(sys)

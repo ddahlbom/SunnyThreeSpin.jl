@@ -84,13 +84,18 @@ function reshape_supercell_aux(sys::System{N}, new_cryst::Crystal, new_dims::NTu
     # reshaped system will also update interactions in its `origin` system.
     orig_sys = clone_system(@something sys.origin sys)
 
-    new_sys = System(orig_sys, sys.mode, new_cryst, new_dims, new_Ns, new_κs, new_gs, new_ints, new_ewald,
+    new_sys = System(orig_sys, sys.mode, new_cryst, new_dims, new_Ns, new_κs, new_gs, new_ints, new_ewald, nothing,
         new_extfield, new_dipoles, new_coherents, new_dipole_buffers, new_coherent_buffers, copy(sys.rng))
 
     # Transfer interactions. In the case of an inhomogeneous system, the
     # interactions in `sys` have detached from `orig`, so we use the latest
     # ones.
     transfer_interactions!(new_sys, sys)
+
+    # Transfer chiral interaction, if present
+    if !isnothing(sys.chiral_interaction)
+        set_chiral_interaction!(new_sys, sys.chiral_interaction.γ)
+    end
 
     # Copy per-site quantities
     for new_site in eachsite(new_sys)
